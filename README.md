@@ -66,13 +66,12 @@ If you use this code or build upon our work, please cite our paper:
 
 
 ```bibtex
-@inproceedings{altinses2023XX,
-  title={XXXX},
-  author={Altinses, Diyar and Schwung, Andreas},
-  booktitle={XXXXX},
-  pages={XXX},
-  year={XXXX},
-  organization={XXX}
+@article{altinses2026efficient,
+  title={Efficient Heat Generation Systems Through Transformer and Recurrent Neural Forecasting Combined With Mixed-Integer Predictive Control},
+  author={Altinses, Diyar and L{\"o}ppenberg, Marlon and Schwung, Andreas},
+  journal={IEEE Transactions on Control Systems Technology},
+  year={2026},
+  publisher={IEEE}
 }
 ```
 
