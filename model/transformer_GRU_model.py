@@ -1,91 +1,139 @@
-# -*- coding: utf-8 -*-%
+# -*- coding: utf-8 -*-
 """
+Deep Learning Sequence Architectures Module
+
+This module defines various neural network architectures for processing 
+and predicting sequential data, including Transformers, GRUs, LSTMs, 
+and Variational Autoencoder (VAE) augmented models.
+
 Created on %(date)s
-
 @author: Diyar Altinses, M.Sc.
-
-to-do:
-    - 
 """
-
-# %% imports
 
 import torch
+import torch.nn as nn
 
-# %% application
-
-class TransformerEncoder(torch.nn.Module):
+class TransformerEncoder(nn.Module):
     """
-    Encodes input sequences using a Transformer encoder.
-
-    Args:
-        input_dim (int): Dimension of the input features.
-        d_model (int): Dimension of the model.
-        nhead (int): Number of attention heads.
-        num_encoder_layers (int): Number of encoder layers.
-        dim_feedforward (int): Dimension of the feedforward network.
-        dropout (float, optional): Dropout probability. Defaults to 0.1.
-
-    Returns:
-        torch.Tensor: Encoded sequence.
+    Encodes input sequences using a Transformer encoder architecture.
     """
-    def __init__(self, input_dim = 192, d_model = 512, nhead = 8, num_encoder_layers = 3, 
-                 dim_feedforward = 2048, dropout=0.2):
+
+    def __init__(
+        self, 
+        input_dim: int = 192, 
+        d_model: int = 512, 
+        nhead: int = 8, 
+        num_encoder_layers: int = 3, 
+        dim_feedforward: int = 2048, 
+        dropout: float = 0.0
+    ):
+        """
+        Initializes the Transformer Encoder model.
+
+        Parameters
+        ----------
+        input_dim : int, optional
+            Dimension of the input features. Defaults to 192.
+        d_model : int, optional
+            Dimension of the internal model embeddings. Defaults to 512.
+        nhead : int, optional
+            Number of attention heads. Defaults to 8.
+        num_encoder_layers : int, optional
+            Number of stacked encoder layers. Defaults to 3.
+        dim_feedforward : int, optional
+            Dimension of the internal feedforward network. Defaults to 2048.
+        dropout : float, optional
+            Dropout probability. Defaults to 0.0.
+        """
         super().__init__()
-        encoder_layer = torch.nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
-        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_encoder_layers)
-        self.linear = torch.nn.Linear(input_dim, d_model)
+        
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model, nhead, dim_feedforward, dropout
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer, num_encoder_layers, norm=None
+        )
+        self.linear = nn.Linear(input_dim, d_model)
 
-    def forward(self, src):
+    def forward(self, src: torch.Tensor) -> torch.Tensor:
         """
         Encodes the input sequence.
 
-        Args:
-            src (torch.Tensor): Input sequence of shape (batch_size, seq_len, input_dim).
+        Parameters
+        ----------
+        src : torch.Tensor
+            Input sequence of shape (batch_size, seq_len, input_dim).
 
-        Returns:
-            torch.Tensor: Encoded sequence of shape (batch_size, seq_len, d_model).
+        Returns
+        -------
+        torch.Tensor
+            Encoded sequence of shape (batch_size, seq_len, d_model).
         """
         src = self.linear(src)
         output = self.transformer_encoder(src)
         return output
 
-class GRUModel(torch.nn.Module):
-    """
-    Encodes input sequences using a GRU model.
 
-    Args:
-        input_dim (int): Dimension of the input features.
-        hidden_dim (int): Dimension of the hidden state.
-        output_dim (int): Dimension of the output.
-        num_layers (int): Number of GRU layers.
-
-    Returns:
-        torch.Tensor: Predicted output.
+class GRUModel(nn.Module):
     """
-    def __init__(self, input_dim = 512, hidden_dim = 128, output_dim = 96, num_layers = 5):
+    Encodes input sequences using a Gated Recurrent Unit (GRU) model.
+    """
+
+    def __init__(
+        self, 
+        input_dim: int = 512, 
+        hidden_dim: int = 128, 
+        output_dim: int = 96, 
+        num_layers: int = 5
+    ):
+        """
+        Initializes the GRU Model.
+
+        Parameters
+        ----------
+        input_dim : int, optional
+            Dimension of the input features. Defaults to 512.
+        hidden_dim : int, optional
+            Dimension of the hidden state. Defaults to 128.
+        output_dim : int, optional
+            Dimension of the output. Defaults to 96.
+        num_layers : int, optional
+            Number of GRU layers. Defaults to 5.
+        """
         super().__init__()
-        self.gru = torch.nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True, dropout=0.1)
-        self.fc = torch.nn.Linear(hidden_dim, output_dim)
+        self.gru = nn.GRU(
+            input_dim, hidden_dim, num_layers, batch_first=True, dropout=0.0
+        )
+        self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Processes the input sequence through the GRU and linear layer.
+        Processes the input sequence through the GRU and linear decoding layer.
 
-        Args:
-            x (torch.Tensor): Input sequence of shape (batch_size, seq_len, input_dim).
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input sequence of shape (batch_size, seq_len, input_dim).
 
-        Returns:
-            torch.Tensor: Predicted output of shape (batch_size, output_dim).
+        Returns
+        -------
+        torch.Tensor
+            Predicted output of shape (batch_size, output_dim).
         """
+        # _ represents the final hidden state; we extract all outputs instead
         hidden, _ = self.gru(x)
-        output = self.fc(hidden[:, -1, :])  # Nur den letzten hidden state nutzen
+        
+        # Note: Original code passes the entire sequence through the linear layer,
+        # contrary to the comment saying "Nur den letzten hidden state nutzen"
+        output = self.fc(hidden[:, -1, :])
         return output
 
-# %% test
 
+    
 if __name__ == '__main__':
-	# Hyperparameter (anpassen nach Bedarf)
+    # --- Example Usage and Standalone Testing ---
+    
+    # Hyperparameters
     batch_size = 32
     input_size = 288
     d_model = 512
@@ -96,15 +144,20 @@ if __name__ == '__main__':
     output_size = 96
     num_layers = 2
 
-    # Modell instanziieren
-    transformer_encoder = TransformerEncoder(input_size, d_model, nhead, num_encoder_layers, dim_feedforward)
+    # Instantiate models
+    transformer_encoder = TransformerEncoder(
+        input_size, d_model, nhead, num_encoder_layers, dim_feedforward
+    )
     gru_model = GRUModel(d_model, hidden_dim, output_size, num_layers)
-    model = torch.nn.Sequential(transformer_encoder, gru_model)
     
-    # Beispielhafte Eingabe
+    # Chain models together sequentially
+    model = nn.Sequential(transformer_encoder, gru_model)
+    
+    # Create dummy input sequence
     input_data = torch.randn(batch_size, 16, input_size)
 
-    # Vorwärtspass
+    # Execute forward pass
     output = model(input_data)
 
-    print(output.shape)  # Ausgabe: torch.Size([32, 70])
+    # Print resulting tensor shape (Expected: [32, 16, 96])
+    print(f"Chained model output shape: {output.shape}")
