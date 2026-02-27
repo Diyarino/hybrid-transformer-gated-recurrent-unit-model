@@ -1,46 +1,60 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug  9 12:12:41 2022
-
-@author: Diyar Altinses, M.Sc.
-
-to-do:
-    - 
+Utility module for locating dataset directories dynamically.
 """
-
-
-# %% imports
 
 import os
 
-# %% Get Dataset Path
-
-
-def get_dataset_path(folder_name="dataset", path="", max_depth=10):
+def get_dataset_path(
+    folder_name: str = "dataset", 
+    path: str = "", 
+    max_depth: int = 10
+) -> str:
     """
-    Parameters.
+    Searches upwards through the directory tree to find a specific folder.
 
+    Parameters
     ----------
     folder_name : str, optional
-        Folder name to look for, first occurence is returned. The default is "dataset".
+        The name of the folder to search for. Defaults to "dataset".
+    path : str, optional
+        The starting path for the search. If left empty, the search begins at the 
+        parent directory of the current working directory. Defaults to "".
     max_depth : int, optional
-        Maximum number of parental directories to search. The default is 10.
+        The maximum number of parent directories to traverse upwards. Defaults to 10.
 
     Returns
     -------
-    TYPE
-        DESCRIPTION.
-
+    str
+        The absolute path to the targeted folder. If the folder is not found within 
+        the maximum depth, it returns the joined path of the highest reached 
+        directory and the folder name.
     """
     depth = 0
-    if path == "":
+    
+    # Initialize the starting directory
+    if not path:
+        # Note: This starts at the PARENT of the current working directory
         current_dir = os.path.dirname(os.getcwd())
     else:
         current_dir = path
 
     while depth < max_depth:
-        if folder_name in os.listdir(current_dir):
+        target_path = os.path.join(current_dir, folder_name)
+        
+        # Check if the directory exists directly (faster and safer than os.listdir)
+        if os.path.isdir(target_path):
+            return target_path
+            
+        # Move one directory level up
+        parent_dir = os.path.dirname(current_dir)
+        
+        # Safety break: Stop if we have reached the root directory (e.g., 'C:\\' or '/')
+        # to prevent infinite loops if max_depth is set extremely high.
+        if current_dir == parent_dir:
             break
-        current_dir = os.path.dirname(current_dir)
+            
+        current_dir = parent_dir
         depth += 1
+        
     return os.path.join(current_dir, folder_name)

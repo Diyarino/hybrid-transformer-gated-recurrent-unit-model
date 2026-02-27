@@ -1,189 +1,291 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jul  4 11:36:24 2023
-
-@author: Torres
+Module for data scaling, normalization, and windowed dataset generation.
 """
 
-#%% imports
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch 
 import os
+from typing import Tuple, List, Optional
 
-#%% Scaling methods
+import torch
+import matplotlib.pyplot as plt
+from torch.utils.data import Dataset
 
-class Norm_z_score():
-    def __init__(self,data):
+
+# %% Scaling methods
+
+class NormZScore:
+    """Z-score normalization (standardization) for a given tensor."""
+    def __init__(self, data: torch.Tensor) -> None:
         self.data = data
-        self.data_normalized = (self.data - self.data.mean(dim=0))/self.data.std(dim=0)
-    def __call__(self):
+        self.data_normalized = (self.data - self.data.mean(dim=0)) / self.data.std(dim=0)
+
+    def __call__(self) -> torch.Tensor:
         return self.data_normalized
-     
-class Norm_linear_scalling():
-    def __init__(self, data, lower_value, upper_value):
+
+
+class NormLinearScaling:
+    """Min-Max linear scaling to a specific range."""
+    def __init__(self, data: torch.Tensor, lower_value: float, upper_value: float) -> None:
         self.data = data
         self.lower_value = lower_value
         self.upper_value = upper_value
         self.min = torch.min(self.data)
         self.max = torch.max(self.data)
-        self.data_normalized = ((self.upper_value-self.lower_value)*(self.data - self.min)/(self.max - self.min))+self.lower_value        
-    def __call__(self):
+        
+        # Min-Max Scaling formula
+        self.data_normalized = (
+            (self.upper_value - self.lower_value) * (self.data - self.min) / (self.max - self.min)
+        ) + self.lower_value
+
+    def __call__(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return self.data_normalized, self.min, self.max
-    
-    
-class DeNorm_linear_scalling():
-    def __init__(self, data, lower_value, upper_value, minimum, maximum):
+
+
+class DeNormLinearScaling:
+    """Reverses the linear scaling to return to the original data range."""
+    def __init__(
+        self, 
+        data: torch.Tensor, 
+        lower_value: float, 
+        upper_value: float, 
+        minimum: torch.Tensor, 
+        maximum: torch.Tensor
+    ) -> None:
         self.data = data
         self.lower = lower_value
         self.upper = upper_value
         self.min = minimum
         self.max = maximum
-        self.data_normalized = ((self.max-self.min)*(self.data - self.lower)/(self.upper - self.lower))+self.min        
-    def __call__(self):
-        return self.data_normalized
+        
+        # Inverse Min-Max Scaling formula
+        self.data_denormalized = (
+            (self.max - self.min) * (self.data - self.lower) / (self.upper - self.lower)
+        ) + self.min
 
-class Norm_log_scalling():
-    def __init__(self,data):
+    def __call__(self) -> torch.Tensor:
+        return self.data_denormalized
+
+
+class NormLogScaling:
+    """Logarithmic scaling for a given tensor."""
+    def __init__(self, data: torch.Tensor) -> None:
         self.data = data
         self.data_normalized = torch.log(self.data)
-    def __call__(self):
+
+    def __call__(self) -> torch.Tensor:
         return self.data_normalized
 
-#%% Normalization
 
-class Normalization():
-    def __init__(self,data, save_path="", normalize="Z score",low_value_normalization=0, upper_value_normalization=1,plot_normalized_dataset = True):
-        self.DATA=data
+# %% Normalization
+
+class Normalization:
+    """
+    Applies a specified normalization method to all sensors (columns) of the data
+    and optionally plots the normalized distributions.
+    """
+    def __init__(
+        self, 
+        data: torch.Tensor, 
+        save_path: str = "", 
+        normalize: str = "Z score", 
+        low_value_normalization: float = 0.0, 
+        upper_value_normalization: float = 1.0, 
+        plot_normalized_dataset: bool = True
+    ) -> None:
+        self.data_raw = data
         self.normalize = normalize
         self.low_value_normalization = low_value_normalization
         self.upper_value_normalization = upper_value_normalization
         self.plot_normalized_dataset = plot_normalized_dataset
         self.save_path = save_path
-        self.time = torch.arange(0,self.DATA.shape[0],1)
+        self.time = torch.arange(0, self.data_raw.shape[0], 1)
         
-        # Data normalization
-        self.method()
+        # Pre-allocate variable for the processed dataset
+        self.dataset: torch.Tensor = torch.empty(0)
         
-    
-    def method(self):
+        # Execute normalization logic
+        self._process_data()
+
+    def _process_data(self) -> 'Normalization':
+        """Applies normalization per channel and collects the results."""
+        processed_series: List[torch.Tensor] = []
         
-        self.dataset= torch.tensor(())
-        for i in range(self.DATA.shape[1]):
-            sensor = self.DATA[:,i]
+        for i in range(self.data_raw.shape[1]):
+            sensor = self.data_raw[:, i]
+            series = sensor # Fallback
             
             if self.normalize == "Z score":
-                dataset_z_score_norm = Norm_z_score(sensor)
-                series = dataset_z_score_norm.data_normalized
-                self.plot_normalization(self.time, series, title="Normalized Z Score - sensor_"+str(i), run=i, plotting=self.plot_normalized_dataset)  
+                series = NormZScore(sensor)()
+                title = f"Normalized Z Score - sensor_{i}"
+                
+            elif self.normalize == "linear scalling": # Kept string for backwards compatibility
+                series, _, _ = NormLinearScaling(
+                    sensor, self.low_value_normalization, self.upper_value_normalization
+                )()
+                title = f"Normalized linear scaling sensor_{i}"
+                
+            elif self.normalize == "log scalling":
+                series = NormLogScaling(sensor)()
+                title = f"Normalized log scaling sensor_{i}"
             
-            if self.normalize == "linear scalling":
-                dataset_linear_scalling_norm = Norm_linear_scalling(sensor,self.low_value_normalization,self.upper_value_normalization)
-                series = dataset_linear_scalling_norm.data_normalized
-                self.plot_normalization(self.time, series, title="Normalized linear scalling sensor_"+str(i), run=i, plotting=self.plot_normalized_dataset)  
+            # Plotting if required
+            self.plot_normalization(
+                self.time, series, title=title, run=i, plotting=self.plot_normalized_dataset
+            )
             
-            if self.normalize == "log scalling":
-                dataset_log_scalling_norm = Norm_log_scalling(sensor)
-                series = dataset_log_scalling_norm.data_normalized
-                self.plot_normalization(self.time, series, title="Normalized log scalling sensor_"+str(i), run=i, plotting=self.plot_normalized_dataset)  
+            # Reshape and append to list instead of slow torch.cat in a loop
+            processed_series.append(series.reshape(-1, 1))
             
-            series=series.reshape(len(series),1)
-            self.dataset=torch.cat((self.dataset,series),1)
-            
+        # Efficiently concatenate all processed columns at once
+        self.dataset = torch.cat(processed_series, dim=1)
         return self
-   
-    def __call__(self):
+
+    def __call__(self) -> torch.Tensor:
         return self.dataset
 
-    def plot_normalization(self, time, series, title, run, plotting=False, format="-", start=0, end=None):
+    def plot_normalization(
+        self, 
+        time: torch.Tensor, 
+        series: torch.Tensor, 
+        title: str, 
+        run: int, 
+        plotting: bool = False, 
+        line_format: str = "-", 
+        start: int = 0, 
+        end: Optional[int] = None
+    ) -> plt.Figure:
+        """Plots the normalized series and saves the figure to disk."""
+        plt.style.use("default")
+        fig = plt.figure(figsize=(5, 3))
+        plt.plot(time[start:end], series[start:end], line_format)
+        plt.title(title)
+        plt.xlabel("Time")
+        plt.ylabel("Value")
+        plt.grid(True)
+        
+        # Safe and cross-platform path building
+        data_path = os.path.join(self.save_path, "02_Plots Dataset Generation", f"run{run}")
+        os.makedirs(data_path, exist_ok=True)
+        
+        save_file = os.path.join(data_path, f"{title}.jpg")
+        plt.savefig(save_file, bbox_inches="tight")
+        
+        if plotting:
+            plt.show()
+        else:
+            plt.close(fig)
             
-            plt.style.use("default")
-            fig = plt.figure(figsize=(5, 3))
-            plt.plot(time[start:end], series[start:end], format)
-            plt.title(title)
-            plt.xlabel("Time")
-            plt.ylabel("Value")
-            plt.grid(True)
-            
-            path=self.save_path
-            Datapath=os.path.join(path,"02_Plots Dataset Generation"+"/"+ "run" +str(run))
-            if not os.path.exists(Datapath):
-                os.makedirs(Datapath)
-            plt.savefig(Datapath+"/"+title+".jpg",bbox_inches="tight")
-            
-            if (plotting == True):
-                plt.show()
-            else:
-                plt.close()
-            
-            return fig
-  
-#%% Windowing
-            
-class PreprocessingDataset(torch.utils.data.Dataset):
-    def __init__(self, train, data,save=True,save_path="", splittingdataset = False, reshapedata=False, window_size=25, shift=25, selected_channels=(tuple(range(3)))):
-       
+        return fig
+
+
+# %% Windowing
+
+class PreprocessingDataset(Dataset):
+    """
+    Creates a windowed PyTorch Dataset from time-series data.
+    """
+    def __init__(
+        self, 
+        train: bool, 
+        data: torch.Tensor, 
+        save: bool = True, 
+        save_path: str = "", 
+        splittingdataset: bool = False, 
+        reshapedata: bool = False, 
+        window_size: int = 25, 
+        shift: int = 25, 
+        selected_channels: Tuple[int, ...] = (0, 1, 2)
+    ) -> None:
         self.save = save
         self.save_path = save_path
-        self.window_size=window_size
-        self.shift=shift
-        self.window_split = 0
-        self.selected_channels=selected_channels
-        self.sensors=data.shape[1]
-        self.DATA=data
-        self.LABEL=torch.zeros(0)
+        self.window_size = window_size
+        self.shift = shift
+        self.selected_channels = selected_channels
         
+        self.sensors = data.shape[1]
+        self.data_raw = data
+        self.label = torch.empty(0)  # Standardized empty tensor initialization
         
-        #get train or test data
+        # Train / Test split (80/20)
+        split_idx = int(self.data_raw.shape[0] * 0.8)
         if train:
-            self.DATA= self.DATA[0:(int(self.DATA.shape[0]*0.8))]
+            self.data_raw = self.data_raw[:split_idx]
         else:
-            self.DATA= self.DATA[(int(self.DATA.shape[0]*0.8))::]
+            self.data_raw = self.data_raw[split_idx:]
+            
+        self.datasplit: torch.Tensor = torch.empty(0)
+        self.selected_dataset: torch.Tensor = torch.empty(0)
         
+        # Execute preprocessing pipeline
         self.moving_window()
         self.select_channels()
+        
         if reshapedata:
             self.catall()
             
-    def splitdata(self):   
-        while (self.DATA.shape[0]%self.split!=0):
-            self.split=self.split+1
-    
-        print("the dataset will be split in {} parts of {} rows".format(self.split,self.DATA.shape[0]/(self.split)))
-        self.size_window=int(self.DATA.shape[0]/(self.split))
-        self.split_completeDS=int(self.DATA.shape[0]/self.size_window)
+    def splitdata(self, initial_split: int = 1) -> None:
+        """
+        Splits the dataset into exact mathematical chunks. 
+        Note: initial_split must be provided to prevent infinite loops.
+        """
+        self.split = initial_split
+        # Ensure division without remainder
+        while self.data_raw.shape[0] % self.split != 0:
+            self.split += 1
+
+        size_window = int(self.data_raw.shape[0] / self.split)
+        split_complete_ds = int(self.data_raw.shape[0] / size_window)
         
-        self.datasplit = torch.zeros(self.split_completeDS,self.DATA.shape[1],self.size_window) 
+        print(f"The dataset will be split into {self.split} parts of {size_window} rows.")
         
-        for j in range (self.sensors): #number of channels for the columns
-            k=0
-            for i in range(0, self.DATA.shape[0], self.size_window):
-                self.datasplit[k,j] = self.DATA[i:i+self.size_window,j]
-                k=k+1
+        self.datasplit = torch.zeros(split_complete_ds, self.data_raw.shape[1], size_window) 
+        
+        for j in range(self.sensors):
+            k = 0
+            for i in range(0, self.data_raw.shape[0], size_window):
+                self.datasplit[k, j] = self.data_raw[i : i + size_window, j]
+                k += 1
+                
+    def moving_window(self) -> None:
+        """Applies a sliding window over the time-series data."""
+        window_split = int((self.data_raw.shape[0] - self.window_size) / self.shift) + 1
+        self.datasplit = torch.zeros([window_split, self.sensors, self.window_size]) 
+        
+        k = 0
+        for i in range(window_split):
+            self.datasplit[i] = self.data_raw[k : k + self.window_size].permute(1, 0)
+            k += self.shift
             
-    def moving_window(self):
-        
-        self.window_split = int((self.DATA.shape[0]-self.window_size)/self.shift)+1
-        self.datasplit = torch.zeros([self.window_split,self.sensors,self.window_size]) 
-        
-        k=0
-        for i in range(self.window_split):
-            self.datasplit[i]=self.DATA[k:k+self.window_size].permute(1,0)
-            k=k+self.shift
-            
-    def select_channels(self):
-        
-        self.selected_dataset = torch.tensor([])#zeros(self.split_completeDS,len(self.selected_channels),self.size_window)
-        for i in (self.selected_channels):
-            self.selected_dataset=torch.cat((self.selected_dataset, self.datasplit[:,i:i+1]), dim=1)
+    def select_channels(self) -> None:
+        """Filters the windowed dataset for specific sensor channels."""
+        # Using list comprehension for performance instead of iterative torch.cat
+        channels = [self.datasplit[:, i : i + 1] for i in self.selected_channels]
+        if channels:
+            self.selected_dataset = torch.cat(channels, dim=1)
+        else:
+            self.selected_dataset = torch.empty(0)
    
-    def catall(self):
-        #selected_dataset = 110,2,96 
-        #reshape selected_dataset to 1 channel: 220, 1, 96 
-        self.selected_dataset = torch.reshape(self.selected_dataset, (self.selected_dataset.shape[0]*self.selected_dataset.shape[1],1,self.selected_dataset.shape[2]))
+    def catall(self) -> None:
+        """Reshapes the selected dataset into a single-channel configuration."""
+        batch_size = self.selected_dataset.shape[0]
+        num_channels = self.selected_dataset.shape[1]
+        window_len = self.selected_dataset.shape[2]
         
-    def __len__(self):
+        self.selected_dataset = torch.reshape(
+            self.selected_dataset, 
+            (batch_size * num_channels, 1, window_len)
+        )
+        
+    def __len__(self) -> int:
         return self.selected_dataset.shape[0]
-    def __getitem__(self, idx):
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
         return self.selected_dataset[idx]
+
+
+# %% Backwards Compatibility Aliases
+# Keep your old class names working if you import them in other files!
+Norm_z_score = NormZScore
+Norm_linear_scalling = NormLinearScaling
+DeNorm_linear_scalling = DeNormLinearScaling
+Norm_log_scalling = NormLogScaling

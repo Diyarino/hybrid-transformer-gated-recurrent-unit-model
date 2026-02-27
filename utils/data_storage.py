@@ -1,61 +1,58 @@
 # -*- coding: utf-8 -*-
 """
+Data Storage and Tracking Module
+
+This module provides the DataStorage class, designed to track, store, and 
+display training metrics (like Loss and Accuracy) in real-time during 
+model training loops.
+
 Created on Tue Aug  9 12:33:43 2022
-
 @author: Diyar Altinses, M.Sc.
-
-to-do:
-    - 
 """
 
-# %% imports
-
 import time
+from typing import List, Union
+
 import torch
 
-# %% data storage class
 
-
-class DataStorage():
+class DataStorage:
     """
-    Stores training data while also offering customizable prints of the data.
+    Stores training data while offering customizable console prints.
 
-    Usage
-    ----------
-    Create an instance.\n
-    Call the Store function in every Batch with a given list of the values to store.
-
-    Parameters
-    ----------
-    names : list of str
-        List of str of values to store. Automatically creates and computed a moving average\n
-        for the names 'Loss' and 'Acc' if those are given in this list.
-    average_window : int, optional
-        Window size (in Batches) for the moving average calculation. The default is 100.
-    show : int, optional
-        Number of Batches between each new print. The default is 25.
-    line : int, optional
-        Number of Batches to show values in a new line. The default is 500.
-    header : int, optional
-        Number of Batches to reprint the names for the columns. The default is 5000.
-    step : int, optional
-        Step size of data storage in Batches. Data gets stored every step Batches.\n
-        The default is 1. step = 2 reduces memory consumption by 50\%.
-    precision : int, optional
-        Number of decimal digits shown.
-    auto_show : bool, optional
-        Enable/Disable automatic value display. The default is True.
-
-    Returns
-    -------
-    None.
-
+    This class automatically tracks time and computes moving averages 
+    for 'Loss' and 'Acc' if they are included in the initialization names.
     """
-    def __init__(self, names, average_window=100, show=2, line=50, header=500, step=1, precision=3, name = "", auto_show = True):
+
+    def __init__(
+        self, 
+        names: List[str], 
+        average_window: int = 100, 
+        show: int = 2, 
+        line: int = 50, 
+        header: int = 500, 
+        step: int = 1, 
+        precision: int = 3, 
+        name: str = "", 
+        auto_show: bool = True
+    ):
+        """
+        Initializes the DataStorage instance.
+
+        Args:
+            names (List[str]): List of metric names to store.
+            average_window (int, optional): Window size for moving average. Defaults to 100.
+            show (int, optional): Batches between each new print. Defaults to 2.
+            line (int, optional): Batches before printing on a new line. Defaults to 50.
+            header (int, optional): Batches before reprinting column headers. Defaults to 500.
+            step (int, optional): Storage step size (e.g., step=2 halves memory usage). Defaults to 1.
+            precision (int, optional): Decimal places for printed values. Defaults to 3.
+            name (str, optional): Optional identifier name for the storage instance. Defaults to "".
+            auto_show (bool, optional): Automatically display values. Defaults to True.
+        """
         self.Name = name
-        self.Names = ["Time"]
-        for name in names:
-            self.Names.append(name)
+        self.Names = ["Time"] + names
+        
         self.AverageWindow = average_window
         self.Show = show
         self.Line = line
@@ -65,93 +62,107 @@ class DataStorage():
         self.Batch = 0
         self.autoshow = auto_show
 
+        # Automatically append moving average trackers
         if "Loss" in self.Names:
             self.Names.append("avg. Loss")
         if "Acc" in self.Names:
             self.Names.append("avg. Acc")
 
-        self.Lens = [len(self.Names[idx])+5 for idx in range(len(self.Names))]
-        self.StoredValues = {}
-
-        for name in self.Names:
-            self.StoredValues[name] = []
-
+        # Formatting lengths for console display
+        self.Lens = [len(n) + 5 for n in self.Names]
+        
+        # Initialize empty lists for all tracked metrics
+        self.StoredValues = {n: [] for n in self.Names}
         self.Columns = len(self.Names)
         self.DumpValues = {}
 
-
-    def Store(self, vals, force = False):
+    def Store(self, vals: List[Union[int, float, torch.Tensor]], force: int = 0) -> None:
         """
-        Stores data in internal StoredValues-dictionary.
+        Stores a new row of data in the internal StoredValues dictionary.
 
-        Parameters
-        ----------
-        vals : list of values
-            List of values to be stored in the internal 'StoredValues'-dictionary.\n
-            Order has to be the same as given during initialization. Best used with \n
-            int, float or torch.tensor.
-        force : int
-            If given an integer it appends the values with the given batch number.
-
-        Returns
-        -------
-        None.
-
+        Args:
+            vals (List[Union[int, float, torch.Tensor]]): Metrics to store. Order 
+                must match the `names` provided during initialization.
+            force (int, optional): If > 0, forces storage and display for the 
+                given batch number regardless of the `step` parameter. Defaults to 0.
         """
-        # save time when first storing
+        # Save absolute start time on the first batch
         if self.Batch == 0:
             self.DumpValues["TimeStart"] = time.time()
-        if self.Batch%self.Step == 0 or force > 0:
-            if len(self.StoredValues["Time"]) == 0:
-                self.StoredValues["Time"] = [(time.time() - self.DumpValues["TimeStart"])/60]
-            else:
-                self.StoredValues["Time"].append((time.time() - self.DumpValues["TimeStart"])/60.0)
-            for col in range(1,self.Columns):
-                name = self.Names[col]
-                if name == "avg. Loss":
-                    self.StoredValues[name].append(torch.sum(torch.tensor(self.StoredValues["Loss"][-self.AverageWindow:]))/self.AverageWindow)
-                elif name == "avg. Acc":
-                    self.StoredValues[name].append(torch.sum(torch.tensor(self.StoredValues["Acc"][-self.AverageWindow:]))/self.AverageWindow)
-                else:
-                    if type(vals[col-1]) == torch.Tensor:
-                        self.StoredValues[name].append(vals[col-1].cpu().detach().item())
-                    else:
-                        self.StoredValues[name].append(vals[col-1])
             
+        if self.Batch % self.Step == 0 or force > 0:
+            
+            # Calculate elapsed time in minutes
+            elapsed_time = (time.time() - self.DumpValues["TimeStart"]) / 60.0
+            self.StoredValues["Time"].append(elapsed_time)
+            
+            for col in range(1, self.Columns):
+                current_name = self.Names[col]
+                
+                if current_name == "avg. Loss":
+                    # Calculate moving average for Loss
+                    recent_loss = self.StoredValues["Loss"][-self.AverageWindow:]
+                    avg_loss = torch.sum(torch.tensor(recent_loss)) / self.AverageWindow
+                    self.StoredValues[current_name].append(avg_loss.item() if isinstance(avg_loss, torch.Tensor) else avg_loss)
+                    
+                elif current_name == "avg. Acc":
+                    # Calculate moving average for Accuracy
+                    recent_acc = self.StoredValues["Acc"][-self.AverageWindow:]
+                    avg_acc = torch.sum(torch.tensor(recent_acc)) / self.AverageWindow
+                    self.StoredValues[current_name].append(avg_acc.item() if isinstance(avg_acc, torch.Tensor) else avg_acc)
+                    
+                else:
+                    # Store standard values, extracting floats from tensors if necessary
+                    val = vals[col - 1]
+                    if isinstance(val, torch.Tensor):
+                        self.StoredValues[current_name].append(val.cpu().detach().item())
+                    else:
+                        self.StoredValues[current_name].append(val)
+            
+            # Handle console display logic
             if self.autoshow:
                 if self.Batch == 0:
                     self._GetHead()
                     self._Display()
                     print("")
                 else:
-                    if self.Batch%self.Show == 0 or force > 0:
+                    if self.Batch % self.Show == 0 or force > 0:
                         self._Display()
-                    if self.Batch%self.Line == 0:
+                    if self.Batch % self.Line == 0:
                         print("")
-                    if self.Batch%self.Header == 0:
+                    if self.Batch % self.Header == 0:
                         self._GetHead()
-        self.Batch+=1
+                        
+        self.Batch += 1
 
-    def _Display(self):
+    def _Display(self) -> None:
+        """Formats and prints the most recently stored values to the console."""
         outstr = "\r"
-        args = []
+        args: List[str] = []
+        
         for col in range(self.Columns):
             val = self.StoredValues[self.Names[col]][-1]
             outstr += "{:s}"
 
-            if type(val) == float:
-                val = str(round(val, self.Precision))
-            elif type(val) == torch.Tensor:
-                val = str(round(val.item(), self.Precision))
+            if isinstance(val, float):
+                val_str = str(round(val, self.Precision))
+            elif isinstance(val, torch.Tensor):
+                val_str = str(round(val.item(), self.Precision))
             else:
-                val = str(val)
-            args.append(val+(self.Lens[col]-len(val))*" ")
+                val_str = str(val)
+                
+            # Apply padding based on column length
+            args.append(val_str + (self.Lens[col] - len(val_str)) * " ")
+            
         print(outstr.format(*args), end="")
 
-    def _GetHead(self):
+    def _GetHead(self) -> None:
+        """Prints the column headers formatted to match value widths."""
         print("")
-        string = ""
+        header_string = ""
+        
         for col in range(self.Columns):
             name = self.Names[col]
-            string += name+(self.Lens[col]-len(name))*" "
-        print(string)
+            header_string += name + (self.Lens[col] - len(name)) * " "
+            
+        print(header_string)

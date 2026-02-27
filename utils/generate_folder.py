@@ -1,209 +1,252 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug  9 12:15:06 2022
+Experiment Folder Generation Module
 
-@author: Diyar Altinses, M.Sc.
-
-to-do:
-    - improve the class
+This module provides utilities to automatically generate, structure, and 
+manage directories for training machine learning models, ensuring organized 
+storage for setups, data, images, and model weights.
 """
-
-# %% imports
 
 import os
 import time
+from typing import Tuple, Optional, Union, Any
 
-#%% Generate Train Folder class
 
-class GenerateFolder():
+class GenerateFolder:
     """
-    Generate folder and save every path of train trials.
+    Generates and manages a structured directory hierarchy for training trials.
+    """
 
-    Returns
-    -------
-    None.
-
-    """    
-    
-    def __init__(self, GenerateAll = False):
-
-        self.trainfolder = None
-        self.setupfolder = None
-        self.imgfolder = None
-        self.datafolder = None
-        self.netfolder = None
-        self.tablefolder = None
-        
-        self.setup_idx = 1
-        
-        if GenerateAll:
-            self.GenerateTrainFolder(generate = True)
-            self.GenerateSetupFolder(generate = True)
-            self.GenerateDataFolder(generate = True)
-        
-    def GenerateTrainFolder(self, generate = False, location = False):
-        r"""
-        Return the name of the training folder.
-    
-        Parameters
-        ----------
-        generate : bool, optional
-            Enable to directly create the folder instead of only returning the path.\n
-            Default is False.
-        location : str, optional
-            Alternative location of the folder. 01_Training-folder will be\n
-            automatically created at this location. The default is false (using cwd).
-    
-        Returns
-        -------
-        str
-            Train folder.
-    
+    def __init__(self, generate_all: bool = False) -> None:
         """
-        time_str=time.strftime("%y_%m_%d__%H_%M_%S")
+        Initializes the folder generation class.
+
+        Parameters
+        ----------
+        generate_all : bool, optional
+            If True, instantly generates the train, setup, and data folders 
+            upon instantiation. Defaults to False.
+        """
+        self.trainfolder: Optional[str] = None
+        self.setupfolder: Optional[str] = None
+        self.imgfolder: Optional[str] = None
+        self.datafolder: Optional[str] = None
+        self.netfolder: Optional[str] = None
+        self.tablefolder: Optional[str] = None
         
-        if not location:
-            location = os.getcwd()
-        self.trainfolder = os.path.join(location, "training", time_str)
-        if generate:
-            if not os.path.exists(self.trainfolder):
-                os.makedirs(self.trainfolder)
-        return self.trainfolder
-    
-    def GenerateSetupFolder(self, generate = False, location = False):
-        r"""
-        Return the name of the training folder.
-    
+        self.setup_idx: int = 1
+        
+        if generate_all:
+            self.generate_train_folder(generate=True)
+            self.generate_setup_folder(generate=True)
+            self.generate_data_folder(generate=True)
+            
+    def _validate_location(self, location: Any) -> Optional[str]:
+        """
+        Internal helper to ensure the location is a string. 
+        Extracts the trainfolder path if a GenerateFolder object was passed by mistake.
+        """
+        if location is None:
+            return None
+        
+        # Bugfix for the TypeError you encountered in main.py
+        if isinstance(location, GenerateFolder):
+            if location.trainfolder is None:
+                raise ValueError("Passed a GenerateFolder object as location, but its trainfolder is None.")
+            return location.trainfolder
+            
+        if not isinstance(location, (str, os.PathLike)):
+            raise TypeError(f"Location must be a string or PathLike object, got {type(location).__name__}")
+            
+        return str(location)
+
+    def generate_train_folder(
+        self, 
+        generate: bool = False, 
+        location: Optional[Union[str, 'GenerateFolder']] = None, 
+        name: str = ''
+    ) -> 'GenerateFolder':
+        """
+        Defines and optionally creates the main training directory based on current time.
+
         Parameters
         ----------
         generate : bool, optional
-            Enable to directly create the folder instead of only returning the path.\n
-            Default is False.
-        location : str, optional
-            Alternative location of the folder. 01_Training-folder will be\n
-            automatically created at this location. The default is false (using cwd).
-    
+            Directly creates the folder on the disk. Defaults to False.
+        location : str or GenerateFolder, optional
+            Alternative base path. Defaults to None (uses CWD).
+        name : str, optional
+            Suffix string to append to the folder name. Defaults to ''.
+
         Returns
         -------
-        str
-            Train folder.
-    
-        """        
-        if not location:
-            location = self.trainfolder
-        self.setupfolder = os.path.join(location, str(self.setup_idx).zfill(3) + "_Setup")
+        GenerateFolder
+            Returns self for method chaining.
+        """
+        time_str = time.strftime("%y_%m_%d__%H_%M_%S") + name
+        
+        valid_location = self._validate_location(location)
+        if valid_location is None:
+            valid_location = os.getcwd()
+            
+        self.trainfolder = os.path.join(valid_location, "training", time_str)
+        
         if generate:
-            if not os.path.exists(self.setupfolder):
-                os.makedirs(self.setupfolder)
+            os.makedirs(self.trainfolder, exist_ok=True)
+            
         return self
     
-    def GenerateDataFolder(self, generate = False, location = False):
-        r"""
-        Return the name of the training folder.
-    
+    def generate_setup_folder(
+        self, 
+        generate: bool = False, 
+        location: Optional[Union[str, 'GenerateFolder']] = None
+    ) -> 'GenerateFolder':
+        """
+        Defines and optionally creates a specific setup sub-directory.
+
         Parameters
         ----------
         generate : bool, optional
-            Enable to directly create the folder instead of only returning the path.\n
-            Default is False.
-        location : str, optional
-            Alternative location of the folder. 01_Training-folder will be\n
-            automatically created at this location. The default is false (using cwd).
-    
+            Directly creates the folder on the disk. Defaults to False.
+        location : str or GenerateFolder, optional
+            Alternative base path. Defaults to None (uses trainfolder).
+
         Returns
         -------
-        str
-            Train folder.
-    
-        """
-        if not location:
-            location = self.setupfolder
-        self.datafolder = os.path.join(location, "data")
-        self.imgfolder = os.path.join(location, "img")
-        self.netfolder = os.path.join(location, "model")
-        self.tablefolder = os.path.join(location, "table")
+        GenerateFolder
+            Returns self for method chaining.
+        """        
+        valid_location = self._validate_location(location)
+        if valid_location is None:
+            if self.trainfolder is None:
+                raise ValueError("Cannot create setup folder: trainfolder is not initialized.")
+            valid_location = self.trainfolder
+            
+        self.setupfolder = os.path.join(valid_location, str(self.setup_idx).zfill(3) + "_setup")
+        
         if generate:
-            if not os.path.exists(self.datafolder):
-                os.makedirs(self.datafolder)
-            if not os.path.exists(self.imgfolder):
-                os.makedirs(self.imgfolder)
-            if not os.path.exists(self.netfolder):
-                os.makedirs(self.netfolder)
-            if not os.path.exists(self.tablefolder):
-                os.makedirs(self.tablefolder)
+            os.makedirs(self.setupfolder, exist_ok=True)
+            
+        return self
+    
+    def generate_data_folder(
+        self, 
+        generate: bool = False, 
+        location: Optional[Union[str, 'GenerateFolder']] = None
+    ) -> Tuple[str, str, str, str]:
+        """
+        Defines and optionally creates the data, image, model, and table sub-directories.
+
+        Parameters
+        ----------
+        generate : bool, optional
+            Directly creates the folders on the disk. Defaults to False.
+        location : str or GenerateFolder, optional
+            Alternative base path. Defaults to None (uses setupfolder).
+
+        Returns
+        -------
+        Tuple[str, str, str, str]
+            Paths for (datafolder, imgfolder, netfolder, tablefolder).
+        """
+        valid_location = self._validate_location(location)
+        if valid_location is None:
+            if self.setupfolder is None:
+                raise ValueError("Cannot create data folders: setupfolder is not initialized.")
+            valid_location = self.setupfolder
+            
+        self.datafolder = os.path.join(valid_location, "data")
+        self.imgfolder = os.path.join(valid_location, "img")
+        self.netfolder = os.path.join(valid_location, "model")
+        self.tablefolder = os.path.join(valid_location, "table")
+        
+        if generate:
+            os.makedirs(self.datafolder, exist_ok=True)
+            os.makedirs(self.imgfolder, exist_ok=True)
+            os.makedirs(self.netfolder, exist_ok=True)
+            os.makedirs(self.tablefolder, exist_ok=True)
+            
         return self.datafolder, self.imgfolder, self.netfolder, self.tablefolder
 
-    def GetFolder(self):
+    def get_folder(self) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
-        Output all trainfolders.
+        Outputs all current folder paths tracked by the instance.
 
         Returns
         -------
-        trainfolder, setupfolder, datafolder, imgfolder, netfolder
-            All trainfolders.
-
+        Tuple[str, str, str, str, str, str]
+            Paths for (trainfolder, setupfolder, datafolder, imgfolder, netfolder, tablefolder).
         """
-        return self.trainfolder, self.setupfolder, self.datafolder, self.imgfolder, self.netfolder, self.tablefolder
+        return (self.trainfolder, self.setupfolder, self.datafolder, 
+                self.imgfolder, self.netfolder, self.tablefolder)
     
-    def __call__(self, setup_step = False):
+    def __call__(self, setup_step: bool = False) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
-        Create and update the current folder.
+        Updates the internal setup index and returns all active folders.
 
         Parameters
         ----------
         setup_step : bool, optional
-            If new setup folder should be created. The default is False.
+            If True, increments the setup index and creates a new setup folder. Defaults to False.
 
         Returns
         -------
-        trainfolder, setupfolder, datafolder, imgfolder, netfolder
-            All trainfolders.
-
+        Tuple[str, str, str, str, str, str]
+            All tracked folder paths.
         """
         if setup_step:
             self.setup_idx += 1
-            self.GenerateSetupFolder(generate=True)
-        return self.trainfolder, self.setupfolder, self.datafolder, self.imgfolder, self.netfolder, self.tablefolder
+            # Note: We don't automatically trigger data_folder generation here.
+            # You might want to call self.generate_data_folder(generate=True) 
+            # after this if you want new data folders per setup step!
+            self.generate_setup_folder(generate=True)
+            
+        return (self.trainfolder, self.setupfolder, self.datafolder, 
+                self.imgfolder, self.netfolder, self.tablefolder)
 
-# %% generate folder function
+    # --- Backwards Compatibility Aliases ---
+    # These map your old uppercase method calls (e.g., from main.py) to the new PEP 8 methods.
+    GenerateTrainFolder = generate_train_folder
+    GenerateSetupFolder = generate_setup_folder
+    GenerateDataFolder = generate_data_folder
+    GetFolder = get_folder
 
-def generate_trainfolder(generate = False, location = False):
+
+def generate_trainfolder(
+    generate: bool = False, 
+    location: Optional[str] = None
+) -> Tuple[str, str, str, str, str]:
     """
-    Returns the name of the training folder.
+    Standalone function to quickly generate a standard training directory structure.
 
     Parameters
     ----------
     generate : bool, optional
-        Enable to directly create the folder instead of only returning the path.\n
-        Default is False.
+        Directly creates the folders on the disk. Defaults to False.
     location : str, optional
-        Alternative location of the folder. 01_Training-folder will be\n
-        automatically created at this location. The default is false (using cwd).
+        Alternative base path. Defaults to None (uses CWD).
 
     Returns
     -------
-    str
-        Train folder.
-
+    Tuple[str, str, str, str, str]
+        Paths for (train_folder, img_folder, config_folder, model_folder, data_folder).
     """
-    time_str=time.strftime("%y_%m_%d__%H_%M_%S")
+    time_str = time.strftime("%y_%m_%d__%H_%M_%S")
     
-    if not location:
+    if location is None:
         location = os.getcwd()
+        
     train_folder = os.path.join(location, "training", time_str)
     img_folder = os.path.join(train_folder, "img")
     config_folder = os.path.join(train_folder, "config")
     model_folder = os.path.join(train_folder, "model")
     data_folder = os.path.join(train_folder, "data")
+    
     if generate:
-        if not os.path.exists(train_folder):
-            os.makedirs(train_folder)
-        if not os.path.exists(img_folder):
-            os.makedirs(img_folder)
-        if not os.path.exists(config_folder):
-            os.makedirs(config_folder)
-        if not os.path.exists(model_folder):
-            os.makedirs(model_folder)
-        if not os.path.exists(data_folder):
-            os.makedirs(data_folder)
+        os.makedirs(train_folder, exist_ok=True)
+        os.makedirs(img_folder, exist_ok=True)
+        os.makedirs(config_folder, exist_ok=True)
+        os.makedirs(model_folder, exist_ok=True)
+        os.makedirs(data_folder, exist_ok=True)
+        
     return train_folder, img_folder, config_folder, model_folder, data_folder
