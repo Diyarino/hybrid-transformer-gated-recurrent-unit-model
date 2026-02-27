@@ -78,7 +78,7 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, path, window_length=5, window_step=None, mode = 'train', temp = False):
+    def __init__(self, path, window_length=5, window_step=None, mode = 'train', temp = True):
 
         window_step = window_step if window_step else window_length
         
@@ -140,7 +140,7 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
         labels = torch.stack(labels)
         return inputs, labels
     
-    def create_input_label_pairs____(self, data, input_size=5, window_size = 96, num_days = 2):
+    def create_input_label_pairs____(self, data, input_size=5, window_size = 96, num_days = 6):
         '''
         Creates input-label pairs from a tensor.
 

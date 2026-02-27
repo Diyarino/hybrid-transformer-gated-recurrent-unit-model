@@ -1,184 +1,129 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Aug  8 14:31:39 2022
-
-@author: Diyar Altinses, M.Sc.
-
-to-do:
-    - 
-"""
-
-# %% imports
-
 import torch
+from torch.utils.data import Dataset as TorchDataset
+from typing import Callable, Tuple, Optional, Any
 
-
-# %% TestDataset
-
-class Dataset(torch.utils.data.Dataset):
+class Dataset(TorchDataset):
     """
-    Generate a iterable Dataset.
+    A custom iterable dataset.
 
     Parameters
     ----------
-    Data : iterable
-        Input data best used as tensor.
-    Label : iterable
-        Output data best used as tensor.
-
-    Returns
-    -------
-    None.
-
+    data : torch.Tensor
+        Input data tensor.
+    label : torch.Tensor
+        Output data (target) tensor.
+    transforms : Callable, optional
+        A function or transform to apply to the data points. Defaults to None.
     """
 
-    def __init__(self, data, label, transforms=None):
-
+    def __init__(
+        self, 
+        data: torch.Tensor, 
+        label: torch.Tensor, 
+        transforms: Optional[Callable] = None
+    ) -> None:
         self.data = data
         self.label = label
         self.transforms = transforms
 
-    def __str__(self):
-        """
-        Define the describtion of the class.
-
-        Returns
-        -------
-        str
-            The class describtion.
-
-        """
+    def __str__(self) -> str:
+        """Return a brief description of the dataset."""
         return "Simple Dataset"
 
-    def __len__(self):
-        """
-        Define the length of the dataset.
-
-        Returns
-        -------
-        int
-            Length of the dataset.
-
-        """
+    def __len__(self) -> int:
+        """Return the total number of samples in the dataset."""
         return len(self.data)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Get the following item.
+        Retrieve the data point and its corresponding label at the given index.
 
         Parameters
         ----------
         idx : int
-            Index of item.
+            Index of the item to retrieve.
 
         Returns
         -------
-        temp : tuple
-            Tuple of Datapoint and corresponding label.
-
+        Tuple[torch.Tensor, torch.Tensor]
+            A tuple containing the (optionally transformed) data point and its label.
         """
-        if torch.rand(1) > 0.5 and self.transforms:
-            self.data[idx] = self.transforms(self.data[idx])
-        return self.data[idx], self.label[idx]
+        sample = self.data[idx]
+        
+        # Apply transformation with a 50% probability
+        if self.transforms is not None and torch.rand(1).item() > 0.5:
+            sample = self.transforms(sample)
+            
+        return sample, self.label[idx]
 
-# %% Dataloader
 
-
-class DataLoader():
+class DataLoader:
     """
+    A simple custom data loader for iterating over a dataset in batches.
 
-    Parameters.
-
+    Parameters
     ----------
-    data : tensor, required
-        Dataset as Itarable Object which gives tuple of inputs and outputs.
+    data : Any
+        The dataset to load data from. Must support slicing/multiple indices.
     batch_size : int, optional
-        Defines the size of one batch. The default is 1.
+        The number of samples per batch. Defaults to 1.
     shuffle : bool, optional
-        If shuffle is set True all Datapoint are mixed. The default is None.
-
-    Raises
-    ------
-    Stop Iteration
-        If all Datapoints are processed
-
-    Returns
-    -------
-    Iterable Object.
-
+        Whether to shuffle the data at the start of each iteration. Defaults to False.
     """
 
-    def __init__(self, data, batch_size=1, shuffle=False):
-
+    def __init__(self, data: Any, batch_size: int = 1, shuffle: bool = False) -> None:
         self.data = data
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.len = len(data)
-        n_batches, remainder = divmod(self.len, self.batch_size)
-        self.n_batches = n_batches
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return a brief description of the dataloader."""
+        return "Simple DataLoader"
+
+    def __iter__(self) -> 'DataLoader':
         """
-        Define the describtion of the class.
+        Initialize the iterator and optionally shuffle the data indices.
 
         Returns
         -------
-        str
-            The class describtion.
-
-        """
-        return "Simple Dataloader"
-
-    def __iter__(self):
-        """
-        Iterate over a Dataset.
-
-        Returns
-        -------
-        None
-
+        DataLoader
+            The iterator object itself.
         """
         if self.shuffle:
             indices = torch.randperm(self.len)
-            self.input_tensors, self.targets_tensors = self.data[indices]
         else:
             indices = torch.arange(self.len)
-            self.input_tensors, self.targets_tensors = self.data[indices]
+            
+        self.input_tensors, self.targets_tensors = self.data[indices]
         self.i = 0
+        
         return self
 
-    def __next__(self):
+    def __next__(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Get next batch.
+        Fetch the next batch of data.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            A batch of inputs and their corresponding targets.
 
         Raises
         ------
         StopIteration
-            If iteration is at the end of the dataset.
-
-        Returns
-        -------
-        batch_input : double, required
-            Input batch of a classifier.
-        batch_target : double, required
-            Ground truth (correct) target values.
-
+            When all batches have been yielded.
         """
-        if self.i >= self.len - self.n_batches:
+        if self.i >= self.len:
             raise StopIteration
-        batch_input = self.input_tensors[self.i:self.i+self.batch_size]
-        batch_target = self.targets_tensors[self.i:self.i+self.batch_size]
+            
+        batch_input = self.input_tensors[self.i : self.i + self.batch_size]
+        batch_target = self.targets_tensors[self.i : self.i + self.batch_size]
+        
         self.i += self.batch_size
+        
         return batch_input, batch_target
 
-    def __len__(self):
-        """
-        Give the length of the dataset.
-
-        Returns
-        -------
-        int
-            Length of the dataset.
-
-        """
+    def __len__(self) -> int:
+        """Return the total number of samples processed by the dataloader."""
         return self.len
